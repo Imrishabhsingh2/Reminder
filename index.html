@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkPulse — Smart Reminder System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0d14;
+    --surface: #111520;
+    --surface2: #181e2e;
+    --surface3: #1f2740;
+    --border: #2a3550;
+    --gold: #c9a84c;
+    --gold-light: #e8c96a;
+    --gold-dim: rgba(201,168,76,0.12);
+    --text: #e8eaf0;
+    --text-muted: #7a8aaa;
+    --text-dim: #4a5570;
+    --red: #e05555;
+    --green: #4caf7d;
+    --blue: #5b8dee;
+    --radius: 12px;
+    --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Background mesh ── */
+  body::before {
+    content:'';
+    position:fixed; inset:0;
+    background:
+      radial-gradient(ellipse 80% 60% at 20% 0%, rgba(201,168,76,0.05) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(91,141,238,0.05) 0%, transparent 60%);
+    pointer-events:none; z-index:0;
+  }
+
+  /* ── Layout ── */
+  .app { display:flex; min-height:100vh; position:relative; z-index:1; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 260px; flex-shrink:0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction:column;
+    padding: 28px 0;
+    position: sticky; top:0; height:100vh;
+  }
+  .logo {
+    padding: 0 24px 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 26px; font-weight:700;
+    color: var(--gold);
+    letter-spacing: 0.5px;
+  }
+  .logo-sub { font-size:11px; color:var(--text-muted); letter-spacing:2px; text-transform:uppercase; margin-top:2px; }
+  .nav { padding: 20px 12px; flex:1; }
+  .nav-item {
+    display:flex; align-items:center; gap:12px;
+    padding:11px 14px; border-radius:8px;
+    cursor:pointer; transition:all 0.2s;
+    font-size:14px; font-weight:500;
+    color:var(--text-muted);
+    margin-bottom:2px;
+  }
+  .nav-item:hover { background:var(--surface2); color:var(--text); }
+  .nav-item.active { background:var(--gold-dim); color:var(--gold); border:1px solid rgba(201,168,76,0.2); }
+  .nav-icon { font-size:17px; width:22px; text-align:center; }
+  .nav-badge {
+    margin-left:auto; background:var(--gold);
+    color:#000; font-size:10px; font-weight:700;
+    padding:2px 7px; border-radius:20px;
+  }
+  .sidebar-footer {
+    padding: 20px 24px;
+    border-top: 1px solid var(--border);
+  }
+  .clock {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 32px; font-weight:600;
+    color: var(--text); letter-spacing:1px;
+  }
+  .date-display { font-size:12px; color:var(--text-muted); margin-top:3px; }
+
+  /* ── Main ── */
+  .main { flex:1; padding:36px 40px; max-width:900px; }
+  .page { display:none; animation: fadeIn 0.3s ease; }
+  .page.active { display:block; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+  /* ── Page Header ── */
+  .page-header { margin-bottom:32px; }
+  .page-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 38px; font-weight:700;
+    color: var(--text);
+  }
+  .page-title span { color:var(--gold); }
+  .page-sub { font-size:14px; color:var(--text-muted); margin-top:6px; }
+
+  /* ── Stats Row ── */
+  .stats-row { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:28px; }
+  .stat-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:20px 22px;
+    transition: border-color 0.2s;
+  }
+  .stat-card:hover { border-color:var(--gold); }
+  .stat-label { font-size:12px; color:var(--text-muted); text-transform:uppercase; letter-spacing:1.5px; }
+  .stat-val {
+    font-family:'Cormorant Garamond',serif;
+    font-size:36px; font-weight:700; color:var(--gold);
+    margin:4px 0;
+  }
+  .stat-desc { font-size:12px; color:var(--text-dim); }
+
+  /* ── Card ── */
+  .card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius); padding:24px;
+    margin-bottom:20px;
+  }
+  .card-header {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:20px;
+  }
+  .card-title { font-size:15px; font-weight:600; color:var(--text); }
+  .card-title small { font-size:12px; font-weight:400; color:var(--text-muted); margin-left:8px; }
+
+  /* ── Form ── */
+  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .form-group { display:flex; flex-direction:column; gap:7px; }
+  .form-group.full { grid-column:1/-1; }
+  label { font-size:12px; font-weight:600; color:var(--text-muted); text-transform:uppercase; letter-spacing:1.2px; }
+  input, select, textarea {
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:8px; padding:11px 14px;
+    color:var(--text); font-family:'DM Sans',sans-serif; font-size:14px;
+    outline:none; transition:all 0.2s; width:100%;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-dim);
+  }
+  input::placeholder, textarea::placeholder { color:var(--text-dim); }
+  select option { background:var(--surface2); }
+  textarea { resize:vertical; min-height:80px; }
+  .input-row { display:flex; gap:12px; }
+  .color-dots { display:flex; gap:8px; align-items:center; margin-top:2px; }
+  .color-dot {
+    width:22px; height:22px; border-radius:50%; cursor:pointer;
+    border:2px solid transparent; transition:transform 0.15s;
+  }
+  .color-dot:hover { transform:scale(1.2); }
+  .color-dot.selected { border-color:var(--text); transform:scale(1.15); }
+
+  /* ── Buttons ── */
+  .btn {
+    padding:10px 22px; border-radius:8px; border:none;
+    font-family:'DM Sans',sans-serif; font-size:14px; font-weight:600;
+    cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--gold), #e8a830);
+    color:#000;
+  }
+  .btn-primary:hover { filter:brightness(1.1); transform:translateY(-1px); box-shadow:0 4px 16px rgba(201,168,76,0.3); }
+  .btn-ghost {
+    background:transparent; color:var(--text-muted);
+    border:1px solid var(--border);
+  }
+  .btn-ghost:hover { background:var(--surface2); color:var(--text); }
+  .btn-danger { background:rgba(224,85,85,0.12); color:var(--red); border:1px solid rgba(224,85,85,0.2); }
+  .btn-danger:hover { background:rgba(224,85,85,0.2); }
+  .btn-sm { padding:6px 14px; font-size:12px; }
+  .btn-row { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+
+  /* ── Reminder List ── */
+  .reminder-list { display:flex; flex-direction:column; gap:12px; }
+  .reminder-item {
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:var(--radius); padding:16px 20px;
+    display:flex; align-items:center; gap:16px;
+    transition:all 0.2s; position:relative; overflow:hidden;
+  }
+  .reminder-item::before {
+    content:''; position:absolute; left:0; top:0; bottom:0;
+    width:3px; border-radius:2px 0 0 2px;
+  }
+  .reminder-item:hover { border-color:var(--border); transform:translateX(3px); }
+  .reminder-color { width:38px; height:38px; border-radius:9px; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .reminder-info { flex:1; }
+  .reminder-title { font-size:15px; font-weight:600; color:var(--text); }
+  .reminder-desc { font-size:13px; color:var(--text-muted); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:360px; }
+  .reminder-meta { display:flex; gap:10px; margin-top:6px; flex-wrap:wrap; }
+  .meta-tag {
+    font-size:11px; padding:3px 10px; border-radius:20px;
+    background:var(--surface3); color:var(--text-muted);
+    display:inline-flex; align-items:center; gap:5px;
+  }
+  .meta-tag.time { color:var(--gold); background:var(--gold-dim); }
+  .meta-tag.email { color:var(--blue); background:rgba(91,141,238,0.1); }
+  .meta-tag.status-on { color:var(--green); background:rgba(76,175,125,0.1); }
+  .meta-tag.status-off { color:var(--red); background:rgba(224,85,85,0.1); }
+  .reminder-actions { display:flex; gap:6px; }
+  .toggle-btn {
+    width:40px; height:22px; border-radius:11px; border:none;
+    cursor:pointer; position:relative; transition:background 0.2s;
+    flex-shrink:0;
+  }
+  .toggle-btn.on { background:var(--green); }
+  .toggle-btn.off { background:var(--surface3); }
+  .toggle-btn::after {
+    content:''; position:absolute;
+    width:16px; height:16px; border-radius:50%; background:#fff;
+    top:3px; transition:left 0.2s;
+  }
+  .toggle-btn.on::after { left:21px; }
+  .toggle-btn.off::after { left:3px; }
+
+  /* ── Countdown ── */
+  .next-reminder {
+    background:linear-gradient(135deg,rgba(201,168,76,0.08),rgba(91,141,238,0.05));
+    border:1px solid rgba(201,168,76,0.2);
+    border-radius:var(--radius); padding:20px 24px;
+    margin-bottom:20px; display:flex; align-items:center; gap:20px;
+  }
+  .countdown-ring { flex-shrink:0; position:relative; width:64px; height:64px; }
+  .countdown-ring svg { transform:rotate(-90deg); }
+  .countdown-ring-text {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    font-family:'Cormorant Garamond',serif; font-size:17px; font-weight:700; color:var(--gold);
+  }
+  .countdown-ring-text small { font-family:'DM Sans',sans-serif; font-size:9px; color:var(--text-muted); font-weight:500; line-height:1; }
+  .countdown-info { flex:1; }
+  .countdown-label { font-size:11px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text-muted); }
+  .countdown-name { font-size:20px; font-weight:600; color:var(--text); margin-top:4px; }
+  .countdown-time { font-size:13px; color:var(--gold); margin-top:2px; }
+
+  /* ── Empty State ── */
+  .empty-state {
+    text-align:center; padding:50px 20px;
+    color:var(--text-muted); font-size:14px;
+  }
+  .empty-state .empty-icon { font-size:44px; margin-bottom:14px; }
+  .empty-state strong { display:block; font-size:17px; color:var(--text); margin-bottom:6px; }
+
+  /* ── Settings ── */
+  .settings-section { margin-bottom:28px; }
+  .settings-section-title {
+    font-size:13px; font-weight:600; text-transform:uppercase;
+    letter-spacing:1.5px; color:var(--gold); margin-bottom:16px;
+    padding-bottom:10px; border-bottom:1px solid var(--border);
+  }
+  .info-box {
+    background:rgba(91,141,238,0.08); border:1px solid rgba(91,141,238,0.2);
+    border-radius:8px; padding:14px 16px; font-size:13px; color:#8fb4f0;
+    margin-bottom:16px; line-height:1.6;
+  }
+  .info-box a { color:var(--gold); text-decoration:none; }
+  .info-box a:hover { text-decoration:underline; }
+
+  /* ── Notification Toast ── */
+  #toast-container { position:fixed; top:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:10px; }
+  .toast {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; padding:14px 18px;
+    display:flex; align-items:flex-start; gap:12px;
+    min-width:300px; max-width:380px;
+    box-shadow:var(--shadow); animation:slideIn 0.3s ease;
+  }
+  .toast.success { border-left:3px solid var(--green); }
+  .toast.error { border-left:3px solid var(--red); }
+  .toast.info { border-left:3px solid var(--gold); }
+  @keyframes slideIn { from{opacity:0;transform:translateX(30px)} to{opacity:1;transform:translateX(0)} }
+  .toast-icon { font-size:18px; flex-shrink:0; margin-top:1px; }
+  .toast-body { flex:1; }
+  .toast-title { font-size:14px; font-weight:600; color:var(--text); }
+  .toast-msg { font-size:12px; color:var(--text-muted); margin-top:2px; }
+  .toast-close { background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:16px; padding:0; flex-shrink:0; }
+
+  /* ── History ── */
+  .history-item {
+    display:flex; align-items:center; gap:14px;
+    padding:12px 0; border-bottom:1px solid var(--border);
+  }
+  .history-item:last-child { border-bottom:none; }
+  .history-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+  .history-text { flex:1; font-size:14px; color:var(--text); }
+  .history-time { font-size:12px; color:var(--text-muted); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width:6px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  /* ── Responsive ── */
+  @media(max-width:768px){
+    .sidebar{ width:220px; }
+    .main{ padding:24px 20px; }
+    .stats-row{ grid-template-columns:1fr; }
+    .form-grid{ grid-template-columns:1fr; }
+    .form-group.full{ grid-column:1; }
+  }
+  @media(max-width:600px){
+    .app{ flex-direction:column; }
+    .sidebar{ width:100%; height:auto; position:relative; flex-direction:row; padding:16px; }
+    .sidebar-footer{ display:none; }
+    .nav{ padding:0; display:flex; gap:6px; flex:1; }
+    .nav-item .nav-label{ display:none; }
+    .logo{ padding:0 16px 0 0; border-bottom:none; border-right:1px solid var(--border); }
+    .logo-sub{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div id="toast-container"></div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-title">WorkPulse</div>
+      <div class="logo-sub">Reminder System</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active" onclick="showPage('dashboard',this)">
+        <span class="nav-icon">⬡</span>
+        <span class="nav-label">Dashboard</span>
+      </div>
+      <div class="nav-item" onclick="showPage('reminders',this)">
+        <span class="nav-icon">◷</span>
+        <span class="nav-label">Reminders</span>
+        <span class="nav-badge" id="badge">0</span>
+      </div>
+      <div class="nav-item" onclick="showPage('add',this)">
+        <span class="nav-icon">✦</span>
+        <span class="nav-label">Add Reminder</span>
+      </div>
+      <div class="nav-item" onclick="showPage('history',this)">
+        <span class="nav-icon">◈</span>
+        <span class="nav-label">History</span>
+      </div>
+      <div class="nav-item" onclick="showPage('settings',this)">
+        <span class="nav-icon">⚙</span>
+        <span class="nav-label">Settings</span>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="clock" id="clock">--:--</div>
+      <div class="date-display" id="dateDisplay">Loading...</div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+
+    <!-- Dashboard -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <div class="page-title">Good <span id="greeting">Day</span> 👋</div>
+        <div class="page-sub">Here's your reminder overview for today.</div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Total Reminders</div>
+          <div class="stat-val" id="stat-total">0</div>
+          <div class="stat-desc">All reminders configured</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Active Today</div>
+          <div class="stat-val" id="stat-active">0</div>
+          <div class="stat-desc">Currently enabled</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Sent Today</div>
+          <div class="stat-val" id="stat-sent">0</div>
+          <div class="stat-desc">Notifications dispatched</div>
+        </div>
+      </div>
+
+      <div class="next-reminder" id="next-reminder-box">
+        <div class="countdown-ring">
+          <svg width="64" height="64" viewBox="0 0 64 64">
+            <circle cx="32" cy="32" r="27" fill="none" stroke="var(--surface3)" stroke-width="5"/>
+            <circle cx="32" cy="32" r="27" fill="none" stroke="var(--gold)" stroke-width="5"
+              stroke-linecap="round" stroke-dasharray="169.6" id="countdown-arc" stroke-dashoffset="169.6"/>
+          </svg>
+          <div class="countdown-ring-text"><span id="countdown-val">--</span><small id="countdown-unit">min</small></div>
+        </div>
+        <div class="countdown-info">
+          <div class="countdown-label">Next Reminder</div>
+          <div class="countdown-name" id="next-name">No upcoming reminders</div>
+          <div class="countdown-time" id="next-time"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Upcoming Today <small id="upcoming-count"></small></div>
+          <button class="btn btn-ghost btn-sm" onclick="showPage('add',document.querySelector('.nav-item:nth-child(3)'))">+ Add New</button>
+        </div>
+        <div id="dashboard-list"><div class="empty-state"><div class="empty-icon">🔔</div><strong>No reminders yet</strong>Create your first reminder to get started.</div></div>
+      </div>
+    </div>
+
+    <!-- All Reminders -->
+    <div class="page" id="page-reminders">
+      <div class="page-header">
+        <div class="page-title">All <span>Reminders</span></div>
+        <div class="page-sub">Manage and configure your notification schedule.</div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Reminder Schedule</div>
+          <button class="btn btn-primary btn-sm" onclick="showPage('add',document.querySelector('.nav-item:nth-child(3)'))">✦ Add New</button>
+        </div>
+        <div id="all-reminders-list"><div class="empty-state"><div class="empty-icon">📋</div><strong>No reminders yet</strong>Click "Add New" to create your first reminder.</div></div>
+      </div>
+    </div>
+
+    <!-- Add Reminder -->
+    <div class="page" id="page-add">
+      <div class="page-header">
+        <div class="page-title">New <span>Reminder</span></div>
+        <div class="page-sub">Schedule an automated notification with email delivery.</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div class="card-title">Reminder Details</div></div>
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Reminder Title</label>
+            <input type="text" id="f-title" placeholder="e.g. Team Standup Meeting">
+          </div>
+          <div class="form-group full">
+            <label>Description</label>
+            <textarea id="f-desc" placeholder="Optional details about this reminder..."></textarea>
+          </div>
+          <div class="form-group">
+            <label>Notify Email</label>
+            <input type="email" id="f-email" placeholder="your@email.com">
+          </div>
+          <div class="form-group">
+            <label>Trigger Time</label>
+            <input type="time" id="f-time">
+          </div>
+          <div class="form-group">
+            <label>Repeat</label>
+            <select id="f-repeat">
+              <option value="daily">Every Day</option>
+              <option value="weekdays">Weekdays Only</option>
+              <option value="weekends">Weekends Only</option>
+              <option value="once">One Time Only</option>
+              <option value="mon">Every Monday</option>
+              <option value="tue">Every Tuesday</option>
+              <option value="wed">Every Wednesday</option>
+              <option value="thu">Every Thursday</option>
+              <option value="fri">Every Friday</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Priority</label>
+            <select id="f-priority">
+              <option value="normal">Normal</option>
+              <option value="high">High Priority</option>
+              <option value="low">Low Priority</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label>Color Label</label>
+            <div class="color-dots">
+              <div class="color-dot selected" style="background:#c9a84c" data-color="#c9a84c" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#5b8dee" data-color="#5b8dee" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#4caf7d" data-color="#4caf7d" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#e05555" data-color="#e05555" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#c37fe0" data-color="#c37fe0" onclick="selectColor(this)"></div>
+              <div class="color-dot" style="background:#e08c30" data-color="#e08c30" onclick="selectColor(this)"></div>
+            </div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" onclick="clearForm()">Clear</button>
+          <button class="btn btn-primary" onclick="addReminder()">✦ Schedule Reminder</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="page" id="page-history">
+      <div class="page-header">
+        <div class="page-title">Notification <span>History</span></div>
+        <div class="page-sub">Log of all dispatched reminders and alerts.</div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Activity Log</div>
+          <button class="btn btn-ghost btn-sm" onclick="clearHistory()">Clear All</button>
+        </div>
+        <div id="history-list"><div class="empty-state"><div class="empty-icon">📜</div><strong>No history yet</strong>Dispatched notifications will appear here.</div></div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <div class="page-title">Email <span>Settings</span></div>
+        <div class="page-sub">Configure EmailJS to send email notifications.</div>
+      </div>
+      <div class="card">
+        <div class="settings-section">
+          <div class="settings-section-title">📧 EmailJS Configuration</div>
+          <div class="info-box">
+            To send real emails, you need a free <a href="https://www.emailjs.com" target="_blank">EmailJS</a> account.<br>
+            1. Sign up at <strong>emailjs.com</strong> → Create an <strong>Email Service</strong> (Gmail, Outlook, etc.)<br>
+            2. Create an <strong>Email Template</strong> with variables: <code>{{to_email}}</code>, <code>{{reminder_title}}</code>, <code>{{reminder_description}}</code>, <code>{{reminder_time}}</code><br>
+            3. Copy your <strong>Service ID</strong>, <strong>Template ID</strong>, and <strong>Public Key</strong> below.
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Service ID</label>
+              <input type="text" id="s-service" placeholder="service_xxxxxxx">
+            </div>
+            <div class="form-group">
+              <label>Template ID</label>
+              <input type="text" id="s-template" placeholder="template_xxxxxxx">
+            </div>
+            <div class="form-group full">
+              <label>Public Key</label>
+              <input type="text" id="s-pubkey" placeholder="Your EmailJS public key">
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-ghost" onclick="testEmail()">⚡ Send Test Email</button>
+            <button class="btn btn-primary" onclick="saveSettings()">✦ Save Settings</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">🔔 Browser Notifications</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 0;">
+            <div>
+              <div style="font-size:14px;font-weight:600;color:var(--text)">Desktop Notifications</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:3px;">Show system notification when reminder fires</div>
+            </div>
+            <button class="btn btn-ghost btn-sm" onclick="requestNotifPerm()" id="notif-btn">Enable</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">⚙ General</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Default Email</label>
+              <input type="email" id="s-default-email" placeholder="default@email.com">
+            </div>
+            <div class="form-group">
+              <label>Check Interval</label>
+              <select id="s-interval">
+                <option value="60">Every 1 minute</option>
+                <option value="30">Every 30 seconds</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="saveSettings()">✦ Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────
+let reminders = JSON.parse(localStorage.getItem('wp_reminders') || '[]');
+let history   = JSON.parse(localStorage.getItem('wp_history')   || '[]');
+let settings  = JSON.parse(localStorage.getItem('wp_settings')  || '{}');
+let sentToday = {};
+let selectedColor = '#c9a84c';
+
+// ── Init ───────────────────────────────────────────────
+window.onload = () => {
+  // Load settings into form
+  if(settings.serviceId)  document.getElementById('s-service').value   = settings.serviceId;
+  if(settings.templateId) document.getElementById('s-template').value  = settings.templateId;
+  if(settings.publicKey)  document.getElementById('s-pubkey').value    = settings.publicKey;
+  if(settings.defaultEmail) document.getElementById('s-default-email').value = settings.defaultEmail;
+  if(settings.interval)   document.getElementById('s-interval').value  = settings.interval;
+
+  if(settings.publicKey) emailjs.init(settings.publicKey);
+
+  updateClock();
+  setInterval(updateClock, 1000);
+  renderAll();
+  updateBadge();
+  updateNotifBtn();
+  checkReminders();
+  setInterval(checkReminders, (parseInt(settings.interval)||60) * 1000);
+};
+
+// ── Clock ──────────────────────────────────────────────
+function updateClock(){
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent = `${h}:${m}`;
+  document.getElementById('dateDisplay').textContent =
+    now.toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
+
+  const hour = now.getHours();
+  const greet = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
+  document.getElementById('greeting').textContent = greet;
+
+  updateNextReminder();
+}
+
+// ── Navigation ─────────────────────────────────────────
+function showPage(id, navEl){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  if(navEl) navEl.classList.add('active');
+  if(id==='dashboard') renderDashboard();
+  if(id==='reminders') renderAllReminders();
+  if(id==='history')   renderHistory();
+}
+
+// ── Add Reminder ───────────────────────────────────────
+function selectColor(el){
+  document.querySelectorAll('.color-dot').forEach(d=>d.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedColor = el.dataset.color;
+}
+
+function addReminder(){
+  const title = document.getElementById('f-title').value.trim();
+  const desc  = document.getElementById('f-desc').value.trim();
+  const email = document.getElementById('f-email').value.trim() || settings.defaultEmail || '';
+  const time  = document.getElementById('f-time').value;
+  const repeat= document.getElementById('f-repeat').value;
+  const priority = document.getElementById('f-priority').value;
+
+  if(!title){ showToast('error','Missing Title','Please enter a reminder title.'); return; }
+  if(!time) { showToast('error','Missing Time','Please select a trigger time.'); return; }
+
+  const reminder = {
+    id: Date.now(),
+    title, desc, email, time, repeat, priority,
+    color: selectedColor,
+    active: true,
+    created: new Date().toISOString()
+  };
+  reminders.push(reminder);
+  save();
+  renderAll();
+  updateBadge();
+  clearForm();
+  showToast('success','Reminder Created',`"${title}" scheduled for ${formatTime(time)}`);
+  showPage('reminders', document.querySelector('.nav-item:nth-child(2)'));
+}
+
+function clearForm(){
+  ['f-title','f-desc','f-email','f-time'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-repeat').value='daily';
+  document.getElementById('f-priority').value='normal';
+}
+
+// ── Render ─────────────────────────────────────────────
+function renderAll(){ renderDashboard(); renderAllReminders(); }
+
+function renderDashboard(){
+  const now = new Date();
+  const active = reminders.filter(r=>r.active);
+  const todayList = active.filter(r=>shouldFireToday(r)).sort((a,b)=>a.time.localeCompare(b.time));
+
+  document.getElementById('stat-total').textContent = reminders.length;
+  document.getElementById('stat-active').textContent = active.length;
+  document.getElementById('stat-sent').textContent = Object.keys(sentToday).length;
+  document.getElementById('upcoming-count').textContent = `${todayList.length} reminders`;
+
+  const container = document.getElementById('dashboard-list');
+  if(!todayList.length){
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🎯</div><strong>All clear!</strong>No reminders scheduled for today.</div>`;
+    return;
+  }
+  container.innerHTML = `<div class="reminder-list">${todayList.slice(0,5).map(r=>reminderCard(r,true)).join('')}</div>`;
+}
+
+function renderAllReminders(){
+  const container = document.getElementById('all-reminders-list');
+  if(!reminders.length){
+    container.innerHTML=`<div class="empty-state"><div class="empty-icon">📋</div><strong>No reminders yet</strong>Click "Add New" to create your first reminder.</div>`;
+    return;
+  }
+  const sorted = [...reminders].sort((a,b)=>a.time.localeCompare(b.time));
+  container.innerHTML=`<div class="reminder-list">${sorted.map(r=>reminderCard(r,false)).join('')}</div>`;
+}
+
+function reminderCard(r, compact){
+  const repeatLabel = {daily:'Daily',weekdays:'Weekdays',weekends:'Weekends',once:'One Time',mon:'Mon',tue:'Tue',wed:'Wed',thu:'Thu',fri:'Fri'}[r.repeat]||r.repeat;
+  const priorityEmoji = {high:'🔴',normal:'🟡',low:'🟢'}[r.priority]||'';
+  return `
+  <div class="reminder-item" id="ri-${r.id}" style="border-left-color:${r.color}">
+    <div style="border-left:3px solid ${r.color};position:absolute;left:0;top:0;bottom:0;border-radius:2px 0 0 2px"></div>
+    <div class="reminder-color" style="background:${r.color}22">${priorityEmoji||'🔔'}</div>
+    <div class="reminder-info">
+      <div class="reminder-title">${escHtml(r.title)}</div>
+      ${r.desc?`<div class="reminder-desc">${escHtml(r.desc)}</div>`:''}
+      <div class="reminder-meta">
+        <span class="meta-tag time">⏰ ${formatTime(r.time)}</span>
+        <span class="meta-tag">${repeatLabel}</span>
+        ${r.email?`<span class="meta-tag email">✉ ${escHtml(r.email)}</span>`:''}
+        <span class="meta-tag ${r.active?'status-on':'status-off'}">${r.active?'● Active':'○ Paused'}</span>
+      </div>
+    </div>
+    <div class="reminder-actions">
+      <button class="toggle-btn ${r.active?'on':'off'}" onclick="toggleReminder(${r.id})" title="${r.active?'Pause':'Activate'}"></button>
+      ${!compact?`<button class="btn btn-danger btn-sm" onclick="deleteReminder(${r.id})" title="Delete">✕</button>`:''}
+    </div>
+  </div>`;
+}
+
+function renderHistory(){
+  const container = document.getElementById('history-list');
+  if(!history.length){
+    container.innerHTML=`<div class="empty-state"><div class="empty-icon">📜</div><strong>No history yet</strong>Dispatched notifications appear here.</div>`;
+    return;
+  }
+  const items = [...history].reverse().slice(0,50);
+  container.innerHTML = items.map(h=>`
+    <div class="history-item">
+      <div class="history-dot" style="background:${h.color||'var(--gold)'}"></div>
+      <div class="history-text"><strong>${escHtml(h.title)}</strong>${h.email?` → ${escHtml(h.email)}`:''}</div>
+      <div class="history-time">${h.time}</div>
+    </div>`).join('');
+}
+
+// ── Toggle / Delete ────────────────────────────────────
+function toggleReminder(id){
+  const r = reminders.find(r=>r.id===id);
+  if(r){ r.active=!r.active; save(); renderAll(); updateBadge(); }
+}
+function deleteReminder(id){
+  if(!confirm('Delete this reminder?')) return;
+  reminders = reminders.filter(r=>r.id!==id);
+  save(); renderAll(); updateBadge();
+  showToast('info','Deleted','Reminder removed.');
+}
+
+// ── Check Reminders ────────────────────────────────────
+function checkReminders(){
+  const now = new Date();
+  const hhmm = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  reminders.filter(r=>r.active && r.time===hhmm && shouldFireToday(r) && !sentToday[r.id]).forEach(r=>{
+    sentToday[r.id] = true;
+    fireReminder(r);
+    if(r.repeat==='once'){
+      r.active=false; save(); renderAll();
+    }
+  });
+
+  // Reset sentToday at midnight
+  if(hhmm==='00:00') sentToday={};
+}
+
+function shouldFireToday(r){
+  const day = new Date().getDay(); // 0=Sun,6=Sat
+  if(r.repeat==='daily')    return true;
+  if(r.repeat==='once')     return r.active;
+  if(r.repeat==='weekdays') return day>=1&&day<=5;
+  if(r.repeat==='weekends') return day===0||day===6;
+  const dayMap={mon:1,tue:2,wed:3,thu:4,fri:5};
+  return dayMap[r.repeat]===day;
+}
+
+async function fireReminder(r){
+  const timeStr = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+
+  // Browser notification
+  if(Notification.permission==='granted'){
+    new Notification(`⏰ ${r.title}`,{body:r.desc||'Time for your scheduled reminder!',icon:''});
+  }
+
+  // Toast
+  showToast('info',`⏰ ${r.title}`,r.desc||`Reminder fired at ${timeStr}`);
+
+  // Email
+  if(r.email && settings.serviceId && settings.templateId && settings.publicKey){
+    try{
+      await emailjs.send(settings.serviceId, settings.templateId, {
+        to_email: r.email,
+        reminder_title: r.title,
+        reminder_description: r.desc||'No additional details.',
+        reminder_time: timeStr,
+        app_name: 'WorkPulse'
+      });
+      addHistory(r, timeStr, '✉ Email sent');
+    } catch(e){
+      addHistory(r, timeStr, '⚠ Email failed');
+      console.error('EmailJS error:',e);
+    }
+  } else {
+    addHistory(r, timeStr, '🔔 Browser notification');
+  }
+}
+
+function addHistory(r, time, note){
+  history.push({ title: r.title, email: r.email, time, note, color: r.color });
+  if(history.length>200) history=history.slice(-200);
+  localStorage.setItem('wp_history', JSON.stringify(history));
+  document.getElementById('stat-sent').textContent = Object.keys(sentToday).length;
+}
+
+// ── Next Reminder ──────────────────────────────────────
+function updateNextReminder(){
+  const now = new Date();
+  const nowMin = now.getHours()*60+now.getMinutes();
+  const active = reminders.filter(r=>r.active&&shouldFireToday(r))
+    .map(r=>{const [h,m]=r.time.split(':').map(Number);return{...r,mins:h*60+m};})
+    .filter(r=>r.mins>nowMin)
+    .sort((a,b)=>a.mins-b.mins);
+
+  const arc = document.getElementById('countdown-arc');
+  if(!active.length){
+    document.getElementById('next-name').textContent='No more reminders today';
+    document.getElementById('next-time').textContent='';
+    document.getElementById('countdown-val').textContent='--';
+    if(arc) arc.style.strokeDashoffset='169.6';
+    return;
+  }
+  const next = active[0];
+  const diff = next.mins - nowMin;
+  document.getElementById('next-name').textContent=next.title;
+  document.getElementById('next-time').textContent=`Scheduled at ${formatTime(next.time)}`;
+
+  if(diff>60){
+    document.getElementById('countdown-val').textContent=Math.round(diff/60);
+    document.getElementById('countdown-unit').textContent='hr';
+  } else {
+    document.getElementById('countdown-val').textContent=diff;
+    document.getElementById('countdown-unit').textContent='min';
+  }
+
+  // arc: 169.6 = full circumference
+  const progress = Math.max(0, Math.min(1, 1 - diff/480));
+  if(arc) arc.style.strokeDashoffset = 169.6*(1-progress);
+}
+
+// ── Settings ───────────────────────────────────────────
+function saveSettings(){
+  settings.serviceId    = document.getElementById('s-service').value.trim();
+  settings.templateId   = document.getElementById('s-template').value.trim();
+  settings.publicKey    = document.getElementById('s-pubkey').value.trim();
+  settings.defaultEmail = document.getElementById('s-default-email').value.trim();
+  settings.interval     = document.getElementById('s-interval').value;
+  localStorage.setItem('wp_settings', JSON.stringify(settings));
+  if(settings.publicKey) emailjs.init(settings.publicKey);
+  showToast('success','Settings Saved','Your configuration has been saved.');
+}
+
+async function testEmail(){
+  if(!settings.serviceId||!settings.templateId||!settings.publicKey){
+    showToast('error','Not Configured','Please save EmailJS settings first.'); return;
+  }
+  const email = settings.defaultEmail||prompt('Enter test email address:');
+  if(!email) return;
+  try{
+    await emailjs.send(settings.serviceId, settings.templateId, {
+      to_email: email,
+      reminder_title: 'WorkPulse Test',
+      reminder_description: 'This is a test notification from WorkPulse.',
+      reminder_time: new Date().toLocaleTimeString(),
+      app_name: 'WorkPulse'
+    });
+    showToast('success','Test Sent!',`Email delivered to ${email}`);
+  } catch(e){
+    showToast('error','Send Failed',e.text||'Check your EmailJS credentials.');
+  }
+}
+
+function requestNotifPerm(){
+  Notification.requestPermission().then(p=>{
+    updateNotifBtn();
+    if(p==='granted') showToast('success','Notifications Enabled','You will receive browser alerts.');
+    else showToast('error','Permission Denied','Browser notifications were blocked.');
+  });
+}
+function updateNotifBtn(){
+  const btn=document.getElementById('notif-btn');
+  if(!btn) return;
+  if(Notification.permission==='granted'){ btn.textContent='✓ Enabled'; btn.classList.add('btn-primary'); }
+  else if(Notification.permission==='denied'){ btn.textContent='Blocked'; }
+  else { btn.textContent='Enable'; }
+}
+function clearHistory(){ history=[]; localStorage.removeItem('wp_history'); renderHistory(); }
+
+// ── Toast ──────────────────────────────────────────────
+function showToast(type, title, msg){
+  const icons={success:'✓',error:'✕',info:'⏰'};
+  const el=document.createElement('div');
+  el.className=`toast ${type}`;
+  el.innerHTML=`<div class="toast-icon">${icons[type]||'ℹ'}</div><div class="toast-body"><div class="toast-title">${escHtml(title)}</div><div class="toast-msg">${escHtml(msg)}</div></div><button class="toast-close" onclick="this.parentElement.remove()">×</button>`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(()=>el.remove(),5000);
+}
+
+// ── Helpers ────────────────────────────────────────────
+function formatTime(t){if(!t)return'';const[h,m]=t.split(':').map(Number);const ampm=h>=12?'PM':'AM';return`${h%12||12}:${String(m).padStart(2,'0')} ${ampm}`;}
+function escHtml(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function updateBadge(){document.getElementById('badge').textContent=reminders.filter(r=>r.active).length;}
+function save(){localStorage.setItem('wp_reminders',JSON.stringify(reminders));}
+</script>
+</body>
+</html>
